@@ -1,0 +1,289 @@
+# ============================================================
+
+# NEWS TOPIC CLASSIFIER USING BERT
+
+# AG NEWS DATASET
+
+# ============================================================
+
+# ============================================================
+
+# STEP 1: INSTALL REQUIRED LIBRARIES
+
+# ============================================================
+
+!pip install transformers datasets accelerate scikit-learn -q
+
+# ============================================================
+
+# STEP 2: IMPORT LIBRARIES
+
+# ============================================================
+
+import numpy as np
+from datasets import load_dataset
+from transformers import (
+BertTokenizer,
+BertForSequenceClassification,
+Trainer,
+TrainingArguments
+)
+from sklearn.metrics import accuracy_score, f1_score
+
+# ============================================================
+
+# STEP 3: LOAD AG NEWS DATASET
+
+# ============================================================
+
+# The AG News dataset contains four categories:
+
+# 0 = World
+
+# 1 = Sports
+
+# 2 = Business
+
+# 3 = Sci/Tech
+
+dataset = load_dataset("ag_news")
+
+print("Dataset Loaded Successfully!")
+print(dataset)
+
+# ============================================================
+
+# STEP 4: CREATE SMALLER DATASET
+
+# ============================================================
+
+# Using a subset of the dataset to reduce training time.
+
+small_dataset = {
+"train": dataset["train"].shuffle(seed=42).select(range(10000)),
+"test": dataset["test"].shuffle(seed=42).select(range(2000))
+}
+
+print("\nTraining Samples:", len(small_dataset["train"]))
+print("Testing Samples:", len(small_dataset["test"]))
+
+# ============================================================
+
+# STEP 5: LOAD BERT TOKENIZER
+
+# ============================================================
+
+# Tokenizer converts text into tokens that BERT can understand.
+
+tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+
+# ============================================================
+
+# STEP 6: TOKENIZATION FUNCTION
+
+# ============================================================
+
+def tokenize_function(examples):
+
+```
+return tokenizer(
+    examples["text"],
+    padding="max_length",
+    truncation=True,
+    max_length=128
+)
+```
+
+# ============================================================
+
+# STEP 7: TOKENIZE TRAINING AND TEST DATA
+
+# ============================================================
+
+tokenized_train = small_dataset["train"].map(
+tokenize_function,
+batched=True
+)
+
+tokenized_test = small_dataset["test"].map(
+tokenize_function,
+batched=True
+)
+
+print("\nTokenization Completed Successfully!")
+
+# ============================================================
+
+# STEP 8: REMOVE UNUSED COLUMNS
+
+# ============================================================
+
+# Remove original text column after tokenization.
+
+tokenized_train = tokenized_train.remove_columns(["text"])
+tokenized_test = tokenized_test.remove_columns(["text"])
+
+# Convert dataset into PyTorch tensors.
+
+tokenized_train.set_format("torch")
+tokenized_test.set_format("torch")
+
+# ============================================================
+
+# STEP 9: LOAD PRE-TRAINED BERT MODEL
+
+# ============================================================
+
+# Fine-tuning bert-base-uncased for 4-class classification.
+
+model = BertForSequenceClassification.from_pretrained(
+"bert-base-uncased",
+num_labels=4
+)
+
+print("\nBERT Model Loaded Successfully!")
+
+# ============================================================
+
+# STEP 10: DEFINE EVALUATION METRICS
+
+# ============================================================
+
+# Accuracy:
+
+# Measures overall prediction correctness.
+
+# F1 Score:
+
+# Balances precision and recall.
+
+def compute_metrics(pred):
+
+```
+labels = pred.label_ids
+preds = pred.predictions.argmax(-1)
+
+accuracy = accuracy_score(labels, preds)
+
+f1 = f1_score(
+    labels,
+    preds,
+    average="weighted"
+)
+
+return {
+    "accuracy": accuracy,
+    "f1": f1
+}
+```
+
+# ============================================================
+
+# STEP 11: DEFINE TRAINING CONFIGURATION
+
+# ============================================================
+
+training_args = TrainingArguments(
+
+```
+output_dir="./results",
+
+evaluation_strategy="epoch",
+
+save_strategy="epoch",
+
+num_train_epochs=1,
+
+per_device_train_batch_size=8,
+
+per_device_eval_batch_size=8,
+
+logging_dir="./logs",
+
+report_to="none"
+```
+
+)
+
+# ============================================================
+
+# STEP 12: INITIALIZE TRAINER
+
+# ============================================================
+
+trainer = Trainer(
+
+```
+model=model,
+
+args=training_args,
+
+train_dataset=tokenized_train,
+
+eval_dataset=tokenized_test,
+
+compute_metrics=compute_metrics
+```
+
+)
+
+# ============================================================
+
+# STEP 13: TRAIN THE MODEL
+
+# ============================================================
+
+print("\nTraining Started...")
+
+trainer.train()
+
+print("\nTraining Completed Successfully!")
+
+# ============================================================
+
+# STEP 14: EVALUATE MODEL PERFORMANCE
+
+# ============================================================
+
+results = trainer.evaluate()
+
+print("\nEvaluation Results")
+print(results)
+
+# ============================================================
+
+# STEP 15: SAVE TRAINED MODEL
+
+# ============================================================
+
+# Save model and tokenizer for deployment.
+
+model.save_pretrained("bert_news_model")
+
+tokenizer.save_pretrained("bert_news_model")
+
+print("\nModel Saved Successfully!")
+
+# ============================================================
+
+# STEP 16: LABEL MAPPING
+
+# ============================================================
+
+label_names = {
+0: "World",
+1: "Sports",
+2: "Business",
+3: "Sci/Tech"
+}
+
+print("\nNews Categories:")
+print(label_names)
+
+# ============================================================
+
+# PROJECT COMPLETED
+
+# ============================================================
+
+print("\nNews Topic Classification Project Completed Successfully!")
